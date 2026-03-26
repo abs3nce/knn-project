@@ -1,0 +1,12 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "n2f"
+version = "0.1.0"
+description = "Utilizing VLM for extracting names and photos of individuals from a single page of historical newspaper."
+requires-python = ">=3.12"
+
+[tool.setuptools.packages.find]
+where = ["src"]
