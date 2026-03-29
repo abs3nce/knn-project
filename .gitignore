@@ -1,5 +1,6 @@
 # Models and data files
 data/
+models/
 *.pkl
 *.pth
 *.pt
