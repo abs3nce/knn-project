@@ -7,9 +7,11 @@ Utilizing VLM for extracting names and photos of individuals from a single page 
 The `parse_dataset.py` script is designed to process the **PeopleGator** dataset. To initialize the pipeline, ensure the raw dataset is unzipped into the `./data` directory.
 
 #### 🚀 Quick Start
-1. Place the unzipped dataset in `./data/people_gator__data_export`.
-2. Run the pipeline: `python parse_dataset.py`.
-3. The script will generate a structured `./data/pages` directory.
+1. Place the zipped dataset in `./data`.
+2. Unzip it.
+3. Make sure the `./data` contains folder `people_gator__data_export` and inside it is folder `people_gator__data` and `jsonl` files containing the labeled bounding boxes of faces from the dataset.
+4. Run the pipeline: `python parse_dataset.py`.
+5. The script will generate a structured `./data/pages` directory.
 
 #### 🗂 Directory Hierarchy
 After the script completes, pages are validated and moved into one of three status categories:
