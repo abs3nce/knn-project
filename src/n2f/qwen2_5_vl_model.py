@@ -65,10 +65,10 @@ class Qwen2_5_VLModel(LocalModel):
             )
 
     def train(self) -> None:
-        raise NotImplementedError("Training not implemented for Qwen2_5_VLModel")
+        raise NotImplementedError("Training not implemented for Qwen2_5_VLModel.")
 
     def save(self, save_path: Path) -> None:
-        raise NotImplementedError("Saving not implemented for Qwen2_5_VLModel")
+        raise NotImplementedError("Saving not implemented for Qwen2_5_VLModel.")
 
     def _prepare_inputs(self, prompt: str, image_paths: list[Path]) -> BatchEncoding:
         messages: list[Message] = [

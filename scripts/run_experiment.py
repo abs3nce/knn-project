@@ -7,6 +7,7 @@ from loguru import logger
 
 from n2f.annotation_result import AnnotationResult
 from n2f.model import Model
+from n2f.model_identifier import ModelIdentifier
 from n2f.prompt import AnnotatePrompt
 from n2f.statistics import Statistics
 from n2f.model_factory import ModelFactory
@@ -14,19 +15,26 @@ from n2f.utils import strip_markdown_json
 
 
 def main() -> None:
-    args = parse_arguments()
-    initialize_logger(args.jsonl_output_path)
-    model_identifier = get_model_identifier(args)
-    model = get_model(args, model_identifier)
-    dataset_path = args.dataset_path
-    prompt = AnnotatePrompt(args.prompt_path)
-    for image_path in tqdm(get_dataset_image_paths(dataset_path)):
+    arguments = parse_arguments()
+    api_key = vars(arguments).get("api_key")
+
+    initialize_logger(arguments.jsonl_output_path)
+
+    model_identifier = get_model_identifier(arguments)
+    model_factory = ModelFactory()
+    model = model_factory.create_model(
+        model_identifier,
+        api_key=api_key,
+    )
+
+    prompt = AnnotatePrompt(arguments.prompt_path)
+    for image_path in tqdm(get_dataset_image_paths(arguments.dataset_path)):
         statistic = run_model_prediction(
-            prompt=prompt,
-            model_identifier=model_identifier,
             model=model,
+            model_identifier=model_identifier,
+            prompt=prompt,
             image_path=image_path,
-            max_tokens=args.max_tokens,
+            max_tokens=arguments.max_tokens,
         )
         logger.info(statistic.to_json())
 
@@ -36,9 +44,9 @@ def parse_arguments() -> argparse.Namespace:
 
     shared = argparse.ArgumentParser(add_help=False)
     shared.add_argument(
-        "--dataset-path",  # TODO: default dataset path
+        "--dataset-path",
         type=Path,
-        required=True,
+        default=Path("data/pages/with_ner/"),
     )
     shared.add_argument(
         "--prompt-path",
@@ -95,19 +103,25 @@ def parse_arguments() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def get_model_identifier(args: argparse.Namespace) -> str:
-    if args.command == "local":
-        return f"local:{args.model_name}:{args.model_path}"
-    return f"remote:{args.provider}:{args.model_name}"  # TODO: elif and error handling
-
-
-def get_model(args: argparse.Namespace, model_identifier: str) -> Model:
-    model_factory = ModelFactory()
-    if args.command == "remote":  # TODO: elif and error handling
-        model = model_factory.create_model(model_identifier, api_key=args.api_key)
-    else:
-        model = model_factory.create_model(model_identifier)
-    return model
+def get_model_identifier(arguments: argparse.Namespace) -> ModelIdentifier:
+    match arguments.command:
+        case "local":
+            return ModelIdentifier(
+                environment_category="local",
+                registry_key=arguments.model_name,
+                target_value=str(arguments.model_path),
+            )
+        case "remote":
+            return ModelIdentifier(
+                environment_category="remote",
+                registry_key=arguments.provider,
+                target_value=arguments.model_name,
+            )
+        case unrecognized_command:
+            raise ValueError(
+                f"Unknown command category provided: '{unrecognized_command}'. "
+                f"Expected 'local' or 'remote'."
+            )
 
 
 def get_dataset_image_paths(dataset_path: Path) -> list[Path]:
@@ -125,9 +139,9 @@ def initialize_logger(log_path: Path) -> None:
 
 
 def run_model_prediction(
-    prompt: AnnotatePrompt,
-    model_identifier: str,
     model: Model,
+    model_identifier: ModelIdentifier,
+    prompt: AnnotatePrompt,
     image_path: Path,
     max_tokens: int | None,
 ) -> Statistics:
@@ -144,9 +158,8 @@ def run_model_prediction(
     error_message = prediction_response.error_message
 
     try:
-        annotation_result = AnnotationResult.from_json(
-            strip_markdown_json(prediction_response.text)
-        )
+        cleaned_response_text = strip_markdown_json(prediction_response.text)
+        annotation_result = AnnotationResult.from_json(cleaned_response_text)
     except (KeyError, ValueError) as exception:
         success = False
         error_message = str(exception)
@@ -154,7 +167,7 @@ def run_model_prediction(
     return Statistics(
         image_path=image_path,
         image_id=image_path.stem,
-        model=model_identifier,
+        model=str(model_identifier),
         prompt_path=prompt.path,
         annotation_result=annotation_result,
         raw_response=prediction_response.text,

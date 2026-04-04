@@ -33,7 +33,10 @@ class AnnotationResult:
             )
 
             if any(not (0 <= value <= 1000) for value in bounding_box_data):
-                raise ValueError()
+                raise ValueError(
+                    f"Bounding box values must be between 0 and 1000. "
+                    f"Got {bounding_box_data}."
+                )
 
             annotated_bounding_boxes.append(
                 AnnotatedBoundingBox(

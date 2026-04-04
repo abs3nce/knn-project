@@ -3,6 +3,7 @@ from typing import Any
 
 from n2f.local_model import LocalModel
 from n2f.model import Model
+from n2f.model_identifier import ModelIdentifier
 from n2f.openai_model import OpenAIModel
 from n2f.qwen2_5_vl_model import Qwen2_5_VLModel
 from n2f.remote_model import RemoteModel
@@ -17,36 +18,28 @@ class ModelFactory:
             "qwen2_5_vl": Qwen2_5_VLModel,
         }
 
-    def create_model(self, model_identifier: str, **keyword_arguments: Any) -> Model:
-        identifier_parts = model_identifier.split(":", maxsplit=2)
-
-        if len(identifier_parts) != 3:
-            raise ValueError(
-                f"Invalid model identifier '{model_identifier}'. "
-                "Expected format: local:model_name:model_path or "
-                "remote:provider:model_name"
-            )
-
-        environment_category = identifier_parts[0]
-        registry_key = identifier_parts[1]
-        target_value = identifier_parts[2]
-
-        if environment_category == "remote":
-            return self._create_remote_model(
-                provider_name=registry_key,
-                model_name=target_value,
-                keyword_arguments=keyword_arguments,
-            )
-
-        if environment_category == "local":
-            return self._create_local_model(
-                model_name=registry_key,
-                model_path_string=target_value,
-            )
-
-        raise ValueError(
-            f"Unknown model category '{environment_category}'. Expected 'local' or 'remote'."
-        )
+    def create_model(
+        self,
+        model_identifier: ModelIdentifier,
+        **keyword_arguments: Any,
+    ) -> Model:
+        match model_identifier.environment_category:
+            case "remote":
+                return self._create_remote_model(
+                    provider_name=model_identifier.registry_key,
+                    model_name=model_identifier.target_value,
+                    keyword_arguments=keyword_arguments,
+                )
+            case "local":
+                return self._create_local_model(
+                    model_name=model_identifier.registry_key,
+                    model_path_string=model_identifier.target_value,
+                )
+            case _:
+                raise ValueError(
+                    f"Unknown model category '{model_identifier.environment_category}'. "
+                    f"Expected 'local' or 'remote'."
+                )
 
     def _create_remote_model(
         self,
@@ -64,7 +57,7 @@ class ModelFactory:
 
         api_key = keyword_arguments.get("api_key")
         if not api_key or not isinstance(api_key, str):
-            raise ValueError("Missing or invalid required keyword argument: api_key")
+            raise ValueError("Missing required keyword argument: api_key")
 
         return model_class(api_key=api_key, model_name=model_name)
 
