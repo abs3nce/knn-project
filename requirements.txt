@@ -1,0 +1,5 @@
+Jinja2==3.0.3
+loguru==0.7.3
+openai==2.30.0
+qwen_vl_utils==0.0.14
+transformers==5.4.0

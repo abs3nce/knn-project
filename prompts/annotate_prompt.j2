@@ -1,0 +1,14 @@
+Detect every human face visible in this image. 
+For each face, identify the person's name based on the surrounding text.
+Return the data strictly as a JSON object. 
+Use the following specifications:
+Coordinates: Use a normalized scale of 0 to 1000.
+Format: Use [ymin, xmin, ymax, xmax].
+Output Format Example:
+{
+    "detections": [
+        {"bounding_box": [100, 250, 300, 450], "label": "Chuck Norris"},
+        {"bounding_box": [150, 600, 350, 800], "label": "Alan Turing"},
+    ]
+}
+Return only the JSON. No conversational text.
