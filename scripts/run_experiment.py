@@ -1,37 +1,78 @@
-import argparse
+from datetime import datetime
 from pathlib import Path
-from loguru import logger
+import argparse
+import re
 
-from n2f.qwen2_5_vl_model import Qwen2_5_VLModel
-from n2f.openai_model import OpenAIModel
-from n2f.prompt import AnnotatePrompt
 from n2f.annotation_result import AnnotationResult
+from n2f.model import Model
+from n2f.prompt import AnnotatePrompt
+from n2f.statistics import Statistics
+from n2f.model_factory import ModelFactory
+
+
+def get_model_identifier(args: argparse.Namespace) -> str:
+    if args.command == "local":
+        return f"local:{args.model_name}:{args.model_path}"
+    return f"remote:{args.provider}:{args.model_name}"
+
+
+def strip_markdown_json(text: str) -> str:
+    code_block_pattern = r"```json\s*(.*?)\s*```"
+    match = re.search(code_block_pattern, text, re.DOTALL)
+    if match:
+        return match.group(1).strip()
+    return text
+
+
+def create_model(args: argparse.Namespace) -> tuple[Model, str]:
+    model_identifier = get_model_identifier(args)
+    model_factory = ModelFactory()
+    if args.command == "remote":
+        model = model_factory.create_model(model_identifier, api_key=args.api_key)
+    else:
+        model = model_factory.create_model(model_identifier)
+    return model, model_identifier
 
 
 def main() -> None:
     args = parse_arguments()
+    model, model_name = create_model(args)
 
-    # TODO: model factory
-    if args.command == "local":
-        model = Qwen2_5_VLModel(model_path=args.model_path)
-    elif args.command == "remote":
-    model = OpenAIModel(
-        api_key=args.api_key,
-        model_name=args.model_name,
+    image_path = Path(
+        "./data/pages/with_ner/0a0b17fb-4179-11ec-9fc7-00155d012102/0a0b17fb-4179-11ec-9fc7-00155d012102.jpg"
     )
 
     prompt = AnnotatePrompt()
+    start_time = datetime.now()
     response = model.predict(
         prompt.render(),
-        [Path("./data/test_image.jpg")],
+        [image_path],
         max_tokens=args.max_tokens,
     )
+    end_time = datetime.now()
 
     try:
-        annotation_result = AnnotationResult.from_json(response)
+        annotation_result = AnnotationResult.from_json(
+            strip_markdown_json(response.text)
+        )
         print(annotation_result)
-    except KeyError as e:
-        print(f"Failed to parse annotation result: {e}")
+
+        statistics = Statistics(
+            image_path=image_path,
+            image_id="0",
+            model=model_name,
+            annotation_result=annotation_result,
+            raw_response=response.text,
+            success=response.success,
+            error_message=response.error_message,
+            start_timestamp=start_time,
+            end_timestamp=end_time,
+            total_time=end_time - start_time,
+            tokens_used=response.tokens_used,
+        )
+        print(statistics.to_dict())
+    except (KeyError, ValueError) as error:
+        print(f"Failed to parse annotation result: {error}")
 
 
 def parse_arguments() -> argparse.Namespace:
@@ -41,7 +82,6 @@ def parse_arguments() -> argparse.Namespace:
     shared.add_argument(
         "--max-tokens",
         type=int,
-        default=2048,
     )
 
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -49,6 +89,11 @@ def parse_arguments() -> argparse.Namespace:
     local_parser = subparsers.add_parser(
         "local",
         parents=[shared],
+    )
+    local_parser.add_argument(
+        "--model-name",
+        type=str,
+        default="qwen2_5_vl",
     )
     local_parser.add_argument(
         "--model-path",
@@ -60,7 +105,16 @@ def parse_arguments() -> argparse.Namespace:
         "remote",
         parents=[shared],
     )
-    remote_parser.add_argument("--model-name", type=str, default="gpt-5-nano")
+    remote_parser.add_argument(
+        "--model-name",
+        type=str,
+        default="gpt-5-nano",
+    )
+    remote_parser.add_argument(
+        "--provider",
+        type=str,
+        default="openai",
+    )
     remote_parser.add_argument(
         "--api-key",
         type=str,

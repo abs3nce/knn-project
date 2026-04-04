@@ -1,6 +1,8 @@
 from abc import ABC, abstractmethod
 from pathlib import Path
 
+from n2f.response import Response
+
 
 class Model(ABC):
     @abstractmethod
@@ -8,6 +10,6 @@ class Model(ABC):
         self,
         prompt: str,
         image_paths: list[Path],
-        max_tokens: int = 2048,
-    ) -> str:
+        max_tokens: int | None = None,
+    ) -> Response:
         pass

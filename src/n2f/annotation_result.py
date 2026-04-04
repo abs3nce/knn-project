@@ -43,5 +43,20 @@ class AnnotationResult:
     @classmethod
     def from_json(cls, json_string: str) -> "AnnotationResult":
         data: AnnotationResultDict = json.loads(json_string)
-        print(data)
         return cls.from_dict(data)
+
+    def to_dict(self) -> AnnotationResultDict:
+        return {
+            "detections": [
+                {
+                    "bounding_box": [
+                        detection.bounding_box.x_min,
+                        detection.bounding_box.y_min,
+                        detection.bounding_box.x_max,
+                        detection.bounding_box.y_max,
+                    ],
+                    "label": detection.label,
+                }
+                for detection in self.annotated_bounding_boxes
+            ]
+        }

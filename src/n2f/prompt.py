@@ -17,7 +17,7 @@ class Prompt(ABC):
 
 
 class AnnotatePrompt(Prompt):
-    def __init__(self):
+    def __init__(self) -> None:
         self.template = template_environment.get_template(
             PromptTemplate.ANNOTATE_PROMPT.value
         )

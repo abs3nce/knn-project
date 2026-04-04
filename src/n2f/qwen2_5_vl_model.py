@@ -9,10 +9,12 @@ from transformers import (
 
 from n2f.local_model import LocalModel
 from n2f.message import Message
+from n2f.response import Response
 
 
 class Qwen2_5_VLModel(LocalModel):
-    def __init__(self, model_path: Path) -> "Qwen2_5_VLModel":
+    def __init__(self, model_path: Path) -> None:
+        super().__init__(model_path)
         self.model = Qwen2_5_VLForConditionalGeneration.from_pretrained(
             model_path,
             torch_dtype="auto",
@@ -29,23 +31,38 @@ class Qwen2_5_VLModel(LocalModel):
         self,
         prompt: str,
         image_paths: list[Path],
-        max_tokens: int = 2048,
-    ) -> str:
-        inputs = self._prepare_inputs(prompt, image_paths)
-        generated_ids = self.model.generate(
-            **inputs,
-            max_new_tokens=max_tokens,
-            repetition_penalty=1.1,
-        )
-        trimmed_generated_ids = [
-            output_ids[len(input_ids) :]
-            for input_ids, output_ids in zip(inputs.input_ids, generated_ids)
-        ]
-        return self.processor.batch_decode(
-            trimmed_generated_ids,
-            skip_special_tokens=True,
-            clean_up_tokenization_spaces=False,
-        )[0]
+        max_tokens: int | None = None,
+    ) -> Response:
+        try:
+            inputs = self._prepare_inputs(prompt, image_paths)
+            generated_ids = self.model.generate(
+                **inputs,
+                max_new_tokens=max_tokens if max_tokens is not None else 2048,
+                repetition_penalty=1.1,
+            )
+            trimmed_generated_ids = [
+                output_ids[len(input_ids) :]
+                for input_ids, output_ids in zip(inputs.input_ids, generated_ids)
+            ]
+            text = self.processor.batch_decode(
+                trimmed_generated_ids,
+                skip_special_tokens=True,
+                clean_up_tokenization_spaces=False,
+            )[0]
+            tokens_used = sum(len(output_ids) for output_ids in trimmed_generated_ids)
+            return Response(
+                text=text,
+                tokens_used=tokens_used,
+                success=True,
+                error_message=None,
+            )
+        except Exception as exception:
+            return Response(
+                text="",
+                tokens_used=0,
+                success=False,
+                error_message=str(exception),
+            )
 
     def train(self) -> None:
         raise NotImplementedError("Training not implemented for Qwen2_5_VLModel")

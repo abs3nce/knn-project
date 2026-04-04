@@ -1,27 +1,29 @@
 import base64
 from openai import OpenAI
+from openai.types.chat import ChatCompletionMessageParam, ChatCompletionContentPartParam
 from pathlib import Path
 
 from n2f.remote_model import RemoteModel
-from n2f.message import Message
+from n2f.response import Response
 
 
 class OpenAIModel(RemoteModel):
-    def __init__(self, api_key: str, model_name: str):
-        self.api_key = api_key
-        self.model_name = model_name
+    def __init__(self, api_key: str, model_name: str) -> None:
+        super().__init__(api_key, model_name)
         self.client = OpenAI(api_key=self.api_key)
 
     def predict(
         self,
         prompt: str,
         image_paths: list[Path],
-        max_tokens: int = 2048,
-    ) -> str:
-        content = [{"type": "text", "text": prompt}]
+        max_tokens: int | None = None,
+    ) -> Response:
+        content: list[ChatCompletionContentPartParam] = [
+            {"type": "text", "text": prompt}
+        ]
 
-        for path in image_paths:
-            base64_image = self._encode_image(path)
+        for image_path in image_paths:
+            base64_image = self._encode_image(image_path)
             content.append(
                 {
                     "type": "image_url",
@@ -29,19 +31,36 @@ class OpenAIModel(RemoteModel):
                 }
             )
 
-        messages: list[Message] = [
+        messages: list[ChatCompletionMessageParam] = [
             {
                 "role": "user",
                 "content": content,
             }
         ]
 
-        response = self.client.chat.completions.create(
-            model=self.model_name,
-            messages=messages,
-            max_completion_tokens=max_tokens,
-        )
-        return response.choices[0].message.content
+        try:
+            response = self.client.chat.completions.create(
+                model=self.model_name,
+                messages=messages,
+                max_completion_tokens=max_tokens,
+            )
+
+            text = response.choices[0].message.content or "" if response.choices else ""
+            tokens_used = response.usage.completion_tokens if response.usage else 0
+
+            return Response(
+                text=text,
+                tokens_used=tokens_used,
+                success=True,
+                error_message=None,
+            )
+        except Exception as exception:
+            return Response(
+                text="",
+                tokens_used=0,
+                success=False,
+                error_message=str(exception),
+            )
 
     def _encode_image(self, image_path: Path) -> str:
         with open(image_path, "rb") as image_file:
