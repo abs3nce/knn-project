@@ -31,6 +31,10 @@ class AnnotationResult:
                 x_max=bounding_box_data[2],
                 y_max=bounding_box_data[3],
             )
+
+            if any(not (0 <= value <= 1000) for value in bounding_box_data):
+                raise ValueError()
+
             annotated_bounding_boxes.append(
                 AnnotatedBoundingBox(
                     bounding_box=bounding_box,
@@ -44,6 +48,10 @@ class AnnotationResult:
     def from_json(cls, json_string: str) -> "AnnotationResult":
         data: AnnotationResultDict = json.loads(json_string)
         return cls.from_dict(data)
+
+    @classmethod
+    def empty(cls) -> "AnnotationResult":
+        return cls(annotated_bounding_boxes=[])
 
     def to_dict(self) -> AnnotationResultDict:
         return {
