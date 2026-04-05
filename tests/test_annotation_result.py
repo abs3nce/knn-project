@@ -1,7 +1,10 @@
-from n2f.annotation_result import AnnotationResult
+"""Tests for the AnnotationResult class."""
+
+from n2f.core.annotation_result import AnnotationResult
 
 
 def test_annotation_result_from_json() -> None:
+    """Tests the from_json method of the AnnotationResult class."""
     json_string = '{"detections": [{"bounding_box": [214, 540, 480, 920], "label": "Chuck Norris"}]}'
     annotation_result = AnnotationResult.from_json(json_string)
     assert len(annotation_result.annotated_bounding_boxes) == 1

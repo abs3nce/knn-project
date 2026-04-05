@@ -1,6 +1,6 @@
 # Models and data files
 data/
-models/
+/models/
 *.pkl
 *.pth
 *.pt

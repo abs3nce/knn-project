@@ -1,13 +1,19 @@
+"""A module for defining the OpenAI model."""
+
+from pathlib import Path
 import base64
+
 from openai import OpenAI
 from openai.types.chat import ChatCompletionMessageParam, ChatCompletionContentPartParam
-from pathlib import Path
 
-from n2f.remote_model import RemoteModel
-from n2f.response import Response
+from n2f.core.response import Response
+from n2f.models.remote_model import RemoteModel
+from n2f.utils.utils import format_error_message
 
 
 class OpenAIModel(RemoteModel):
+    """A class for interacting with OpenAI's API."""
+
     def __init__(self, api_key: str, model_name: str) -> None:
         super().__init__(api_key, model_name)
         self.client = OpenAI(api_key=self.api_key)
@@ -59,7 +65,7 @@ class OpenAIModel(RemoteModel):
                 text="",
                 tokens_used=0,
                 success=False,
-                error_message=str(exception),
+                error_message=format_error_message(exception),
             )
 
     def _encode_image(self, image_path: Path) -> str:

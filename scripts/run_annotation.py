@@ -1,3 +1,5 @@
+"""Script for annotating a dataset using a model."""
+
 from datetime import datetime
 from pathlib import Path
 import argparse
@@ -5,16 +7,17 @@ import argparse
 from tqdm import tqdm
 from loguru import logger
 
-from n2f.annotation_result import AnnotationResult
-from n2f.model import Model
-from n2f.model_identifier import ModelIdentifier
-from n2f.prompt import AnnotatePrompt
-from n2f.statistics import Statistics
-from n2f.model_factory import ModelFactory
-from n2f.utils import strip_markdown_json
+from n2f.core.annotation_result import AnnotationResult
+from n2f.core.prompt import AnnotatePrompt
+from n2f.models.model import Model
+from n2f.models.model_factory import ModelFactory
+from n2f.models.model_identifier import ModelIdentifier
+from n2f.utils.statistics import Statistics
+from n2f.utils.utils import strip_markdown_json, format_error_message
 
 
 def main() -> None:
+    """Runs the annotation process."""
     arguments = parse_arguments()
     api_key = vars(arguments).get("api_key")
 
@@ -40,27 +43,34 @@ def main() -> None:
 
 
 def parse_arguments() -> argparse.Namespace:
-    parser = argparse.ArgumentParser()
+    """Parses command-line arguments."""
+    parser = argparse.ArgumentParser(
+        description="Run annotation on a dataset using a model and prompt.",
+    )
 
-    shared = argparse.ArgumentParser(add_help=False)
+    shared = argparse.ArgumentParser()
     shared.add_argument(
         "--dataset-path",
         type=Path,
         default=Path("data/pages/with_ner/"),
+        help="Dataset directory with folders containing .jpg files.",
     )
     shared.add_argument(
         "--prompt-path",
         type=Path,
         default=Path("prompts/annotate_prompt.j2"),
+        help="Path to the Jinja2 prompt template.",
     )
     shared.add_argument(
         "--jsonl-output-path",
         type=Path,
         default=Path("output.jsonl"),
+        help="Destination JSONL file.",
     )
     shared.add_argument(
         "--max-tokens",
         type=int,
+        help="Token limit for the model response.",
     )
 
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -68,42 +78,51 @@ def parse_arguments() -> argparse.Namespace:
     local_parser = subparsers.add_parser(
         "local",
         parents=[shared],
+        help="Run a local model from disk.",
     )
     local_parser.add_argument(
         "--model-name",
         type=str,
         default="qwen2_5_vl",
+        help="Local model registry key.",
     )
     local_parser.add_argument(
         "--model-path",
         type=Path,
         required=True,
+        help="Path to the local model directory.",
     )
 
     remote_parser = subparsers.add_parser(
         "remote",
         parents=[shared],
+        help="Run a remote API model.",
+        description="Run a remote model via API.",
     )
     remote_parser.add_argument(
         "--model-name",
         type=str,
         default="gpt-5-nano",
+        help="Remote model name accepted by the provider.",
     )
     remote_parser.add_argument(
         "--provider",
         type=str,
         default="openai",
+        help="Remote model provider (default: openai).",
     )
     remote_parser.add_argument(
         "--api-key",
         type=str,
         required=True,
+        help="API key.",
     )
 
     return parser.parse_args()
 
 
 def get_model_identifier(arguments: argparse.Namespace) -> ModelIdentifier:
+    """Returns a ModelIdentifier based on the provided command-line arguments."""
     match arguments.command:
         case "local":
             return ModelIdentifier(
@@ -125,6 +144,7 @@ def get_model_identifier(arguments: argparse.Namespace) -> ModelIdentifier:
 
 
 def get_dataset_image_paths(dataset_path: Path) -> list[Path]:
+    """Returns a list of image file paths found in the dataset directory."""
     image_paths: list[Path] = []
     for image_directory in tqdm(dataset_path.iterdir()):
         for image_path in image_directory.iterdir():
@@ -134,6 +154,7 @@ def get_dataset_image_paths(dataset_path: Path) -> list[Path]:
 
 
 def initialize_logger(log_path: Path) -> None:
+    """Initializes the logger to write to the specified file."""
     logger.remove()
     logger.add(log_path, format="{message}")
 
@@ -145,6 +166,7 @@ def run_model_prediction(
     image_path: Path,
     max_tokens: int | None,
 ) -> Statistics:
+    """Runs the model prediction and returns statistics about the annotation process."""
     start_timestamp = datetime.now()
     prediction_response = model.predict(
         prompt.render(),
@@ -157,12 +179,13 @@ def run_model_prediction(
     success = prediction_response.success
     error_message = prediction_response.error_message
 
-    try:
-        cleaned_response_text = strip_markdown_json(prediction_response.text)
-        annotation_result = AnnotationResult.from_json(cleaned_response_text)
-    except (KeyError, ValueError) as exception:
-        success = False
-        error_message = str(exception)
+    if success:
+        try:
+            cleaned_response_text = strip_markdown_json(prediction_response.text)
+            annotation_result = AnnotationResult.from_json(cleaned_response_text)
+        except Exception as exception:
+            success = False
+            error_message = format_error_message(exception)
 
     return Statistics(
         image_path=image_path,

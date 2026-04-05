@@ -1,15 +1,19 @@
+"""A module for defining a factory that creates model instances based on model identifiers."""
+
 from pathlib import Path
 from typing import Any
 
-from n2f.local_model import LocalModel
-from n2f.model import Model
-from n2f.model_identifier import ModelIdentifier
-from n2f.openai_model import OpenAIModel
-from n2f.qwen2_5_vl_model import Qwen2_5_VLModel
-from n2f.remote_model import RemoteModel
+from n2f.models.local_model import LocalModel
+from n2f.models.model import Model
+from n2f.models.model_identifier import ModelIdentifier
+from n2f.models.openai_model import OpenAIModel
+from n2f.models.qwen2_5_vl_model import Qwen2_5_VLModel
+from n2f.models.remote_model import RemoteModel
 
 
 class ModelFactory:
+    """A factory class for creating model instances based on model identifiers."""
+
     def __init__(self) -> None:
         self.remote_model_registry: dict[str, type[RemoteModel]] = {
             "openai": OpenAIModel,
@@ -23,6 +27,7 @@ class ModelFactory:
         model_identifier: ModelIdentifier,
         **keyword_arguments: Any,
     ) -> Model:
+        """Creates a model instance based on the model identifier."""
         match model_identifier.environment_category:
             case "remote":
                 return self._create_remote_model(

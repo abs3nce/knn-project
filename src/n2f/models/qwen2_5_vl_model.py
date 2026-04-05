@@ -1,3 +1,5 @@
+"""A module for defining the Qwen2.5-VL model."""
+
 from pathlib import Path
 
 from qwen_vl_utils import process_vision_info
@@ -7,12 +9,15 @@ from transformers import (
     BatchEncoding,
 )
 
-from n2f.local_model import LocalModel
-from n2f.message import Message
-from n2f.response import Response
+from n2f.core.message import Message
+from n2f.core.response import Response
+from n2f.models.local_model import LocalModel
+from n2f.utils.utils import format_error_message
 
 
 class Qwen2_5_VLModel(LocalModel):
+    """A class for interacting with the Qwen2.5-VL model."""
+
     def __init__(self, model_path: Path) -> None:
         super().__init__(model_path)
         self.model = Qwen2_5_VLForConditionalGeneration.from_pretrained(
@@ -61,7 +66,7 @@ class Qwen2_5_VLModel(LocalModel):
                 text="",
                 tokens_used=0,
                 success=False,
-                error_message=str(exception),
+                error_message=format_error_message(exception),
             )
 
     def train(self) -> None:

@@ -1,13 +1,17 @@
+"""A module for defining the Statistics class and related types."""
+
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import TypedDict
 import json
 
-from n2f.annotation_result import AnnotationResult, AnnotationResultDict
+from n2f.core.annotation_result import AnnotationResult, AnnotationResultDict
 
 
 class StatisticsDict(TypedDict):
+    """Representation of the Statistics class for JSON serialization."""
+
     image_path: str
     image_id: str
     model: str
@@ -24,6 +28,8 @@ class StatisticsDict(TypedDict):
 
 @dataclass
 class Statistics:
+    """A class for storing statistics about the annotation process."""
+
     image_path: Path
     image_id: str
     model: str
@@ -38,6 +44,7 @@ class Statistics:
     tokens_used: int
 
     def to_dict(self) -> StatisticsDict:
+        """Returns the statistics as a dictionary."""
         return {
             "image_path": str(self.image_path),
             "image_id": self.image_id,
@@ -54,4 +61,5 @@ class Statistics:
         }
 
     def to_json(self) -> str:
+        """Returns the statistics as a JSON string."""
         return json.dumps(self.to_dict())
