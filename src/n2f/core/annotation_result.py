@@ -34,11 +34,13 @@ class AnnotationResult:
         for bounding_box in bounding_boxes:
             bounding_box_data = bounding_box["bounding_box"]
             label = bounding_box["label"]
+
+            # Assuming the bounding box values are in the format [y_min, x_min, y_max, x_max]
             bounding_box = BoundingBox(
-                x_min=bounding_box_data[0],
-                y_min=bounding_box_data[1],
-                x_max=bounding_box_data[2],
-                y_max=bounding_box_data[3],
+                x_min=bounding_box_data[1],
+                y_min=bounding_box_data[0],
+                x_max=bounding_box_data[3],
+                y_max=bounding_box_data[2],
             )
 
             if any(not (0 <= value <= 1000) for value in bounding_box_data):
