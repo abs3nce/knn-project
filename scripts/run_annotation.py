@@ -48,7 +48,7 @@ def parse_arguments() -> argparse.Namespace:
         description="Run annotation on a dataset using a model and prompt.",
     )
 
-    shared = argparse.ArgumentParser()
+    shared = argparse.ArgumentParser(add_help=False)
     shared.add_argument(
         "--dataset-path",
         type=Path,
