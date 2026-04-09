@@ -111,7 +111,7 @@ def merge_and_filter_jsonl(
 def split_records_by_page(input_file: Path, output_base_dir: Path) -> None:
     """
     Groups records by their 'page' attribute and creates individual folder/file structures.
-    Uses an ExitStack to manage multiple open file handles safely.
+    Groups records in memory first to prevent hitting OS open-file limits.
 
     Args:
         input_file: Path to the combined face detection JSONL.
@@ -121,32 +121,35 @@ def split_records_by_page(input_file: Path, output_base_dir: Path) -> None:
     output_base_dir.mkdir(parents=True, exist_ok=True)
 
     records_processed = 0
+    grouped_records = {}
 
-    with open(input_file, "r", encoding="utf-8") as infile, ExitStack() as stack:
-        open_files: Dict[str, TextIO] = {}
-
+    with open(input_file, "r", encoding="utf-8") as infile:
         for line in infile:
             if not (stripped := line.strip()):
                 continue
+            
             record = json.loads(stripped)
             if not (page_val := record.get("page")):
                 continue
 
             page_id = str(page_val).replace(".jpg", "")
-            if page_id not in open_files:
-                page_dir = output_base_dir / page_id
-                page_dir.mkdir(exist_ok=True)
-
-                f_path = page_dir / f"{page_id}_faces.jsonl"
-                open_files[page_id] = stack.enter_context(
-                    open(f_path, "w", encoding="utf-8")
-                )
-
-            open_files[page_id].write(json.dumps(record) + "\n")
+            if page_id not in grouped_records:
+                grouped_records[page_id] = []
+                
+            grouped_records[page_id].append(record)
             records_processed += 1
 
+    for page_id, records in grouped_records.items():
+        page_dir = output_base_dir / page_id
+        page_dir.mkdir(exist_ok=True)
+
+        f_path = page_dir / f"{page_id}_faces.jsonl"
+        with open(f_path, "w", encoding="utf-8") as outfile:
+            for rec in records:
+                outfile.write(json.dumps(rec) + "\n")
+
     log_success(
-        f"Processed {records_processed} records across {len(open_files)} folders."
+        f"Processed {records_processed} records across {len(grouped_records)} folders."
     )
 
 
@@ -243,6 +246,7 @@ def combine_ner_files(source_root: Path, output_file: Path) -> None:
 def split_ner_by_page(combined_ner_file: Path, pages_root: Path) -> None:
     """
     Distributes records from the combined NER file into corresponding page folders.
+    Groups records in memory first to prevent hitting OS open-file limits.
 
     Args:
         combined_ner_file: Path to the merged NER JSONL.
@@ -250,11 +254,13 @@ def split_ner_by_page(combined_ner_file: Path, pages_root: Path) -> None:
     """
     log_step("Distributing NER records to page folders...")
     count = 0
-    with open(combined_ner_file, "r", encoding="utf-8") as infile, ExitStack() as stack:
-        handles: Dict[str, TextIO] = {}
+    grouped_ner = {}
+
+    with open(combined_ner_file, "r", encoding="utf-8") as infile:
         for line in infile:
             if not (stripped := line.strip()):
                 continue
+            
             rec = json.loads(stripped)
             page_id = str(rec.get("page", "")).replace(".jpg", "")
 
@@ -262,14 +268,21 @@ def split_ner_by_page(combined_ner_file: Path, pages_root: Path) -> None:
             if not page_dir.exists():
                 continue
 
-            if page_id not in handles:
-                handles[page_id] = stack.enter_context(
-                    open(page_dir / f"{page_id}.ner.jsonl", "w", encoding="utf-8")
-                )
+            if page_id not in grouped_ner:
+                grouped_ner[page_id] = []
 
-            handles[page_id].write(line)
+            grouped_ner[page_id].append(stripped)
             count += 1
-    log_success(f"Assigned {count} NER records to page directories.")
+
+    for page_id, lines in grouped_ner.items():
+        page_dir = pages_root / page_id
+        out_path = page_dir / f"{page_id}.ner.jsonl"
+        
+        with open(out_path, "w", encoding="utf-8") as outfile:
+            for ner_line in lines:
+                outfile.write(ner_line + "\n")
+
+    log_success(f"Assigned {count} NER records across {len(grouped_ner)} page directories.")
 
 
 def validate_and_sort_pages(pages_root: Path) -> None:
