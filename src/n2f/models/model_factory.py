@@ -9,6 +9,7 @@ from n2f.models.model_identifier import ModelIdentifier
 from n2f.models.openai_model import OpenAIModel
 from n2f.models.qwen2_5_vl_model import Qwen2_5_VLModel
 from n2f.models.remote_model import RemoteModel
+from n2f.models.youtu_vl_model import Youtu_VLModel
 
 
 class ModelFactory:
@@ -20,6 +21,7 @@ class ModelFactory:
         }
         self.local_model_registry: dict[str, type[LocalModel]] = {
             "qwen2_5_vl": Qwen2_5_VLModel,
+            "youtu-vl": Youtu_VLModel,
         }
 
     def create_model(
