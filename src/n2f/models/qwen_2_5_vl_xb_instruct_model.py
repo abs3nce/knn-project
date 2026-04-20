@@ -15,7 +15,7 @@ from n2f.models.local_model import LocalModel
 from n2f.utils.utils import format_error_message
 
 
-class Qwen2_5_VLModel(LocalModel):
+class Qwen_2_5_vl_xb_instruct_model(LocalModel):
     """A class for interacting with the Qwen2.5-VL model."""
 
     def __init__(self, model_path: Path) -> None:

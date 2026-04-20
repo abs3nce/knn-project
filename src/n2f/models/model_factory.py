@@ -7,7 +7,7 @@ from n2f.models.local_model import LocalModel
 from n2f.models.model import Model
 from n2f.models.model_identifier import ModelIdentifier
 from n2f.models.openai_model import OpenAIModel
-from n2f.models.qwen2_5_vl_model import Qwen2_5_VLModel
+from n2f.models.qwen_2_5_vl_xb_instruct_model import Qwen_2_5_vl_xb_instruct_model
 from n2f.models.remote_model import RemoteModel
 
 
@@ -19,7 +19,9 @@ class ModelFactory:
             "openai": OpenAIModel,
         }
         self.local_model_registry: dict[str, type[LocalModel]] = {
-            "qwen2_5_vl": Qwen2_5_VLModel,
+            "qwen_2_5_vl_3b_instruct": Qwen_2_5_vl_xb_instruct_model,
+            "qwen_2_5_vl_7b_instruct": Qwen_2_5_vl_xb_instruct_model,
+            "qwen_2_5_vl_32b_instruct": Qwen_2_5_vl_xb_instruct_model
         }
 
     def create_model(

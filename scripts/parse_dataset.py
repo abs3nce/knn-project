@@ -23,8 +23,9 @@ from contextlib import ExitStack
 # --- CONFIGURATION ---
 class DatasetConfig:
     """Centralized path configuration for the KNN Project dataset pipeline."""
-
-    DATA_ROOT = Path("../data")
+    SCRIPT_DIR = Path(__file__).resolve().parent
+    
+    DATA_ROOT = SCRIPT_DIR.parent / "data"
     EXPORT_ROOT = DATA_ROOT / "people_gator__data_export"
     SOURCE_ASSETS = EXPORT_ROOT / "people_gator__data"
 
