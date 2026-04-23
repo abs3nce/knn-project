@@ -6,7 +6,8 @@ from pathlib import Path
 from typing import TypedDict
 import json
 
-from n2f.core.annotation_result import AnnotationResult, AnnotationResultDict
+from n2f.core.bounding_box import BoundingBox
+from n2f.core.annotation_result import AnnotationResult
 
 
 class StatisticsDict(TypedDict):
@@ -16,8 +17,10 @@ class StatisticsDict(TypedDict):
     image_id: str
     model: str
     prompt_path: str
+    label: str
+    expected_bounding_box: list[int]
     raw_response: str
-    annotation_result: AnnotationResultDict
+    annotation_result: list[int]
     success: int
     error_message: str
     start_timestamp: str
@@ -34,6 +37,8 @@ class Statistics:
     image_id: str
     model: str
     prompt_path: Path
+    label: str
+    expected_bounding_box: BoundingBox
     raw_response: str
     annotation_result: AnnotationResult
     success: bool
@@ -50,6 +55,8 @@ class Statistics:
             "image_id": self.image_id,
             "model": self.model,
             "prompt_path": str(self.prompt_path),
+            "label": self.label,
+            "expected_bounding_box": self.expected_bounding_box.to_list(),
             "raw_response": self.raw_response,
             "annotation_result": self.annotation_result.to_dict(),
             "success": 0 if not self.success else 1,

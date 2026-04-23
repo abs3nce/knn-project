@@ -13,7 +13,7 @@ class Prompt(ABC):
         self.path = template_file_path
 
     @abstractmethod
-    def render(self) -> str:
+    def render(self, arguments: dict[str, str]) -> str:
         """Renders the prompt template and returns the resulting string."""
 
 
@@ -25,5 +25,5 @@ class AnnotatePrompt(Prompt):
         template_content = template_file_path.read_text(encoding="utf-8")
         self.template = Template(template_content)
 
-    def render(self) -> str:
-        return self.template.render()
+    def render(self, arguments: dict[str, str]) -> str:
+        return self.template.render(**arguments)

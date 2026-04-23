@@ -2,18 +2,35 @@
 
 from datetime import datetime
 from pathlib import Path
+from typing import NamedTuple
 import argparse
+import json
 
 from tqdm import tqdm
 from loguru import logger
 
 from n2f.core.annotation_result import AnnotationResult
+from n2f.core.bounding_box import BoundingBox
 from n2f.core.prompt import AnnotatePrompt
 from n2f.models.model import Model
 from n2f.models.model_factory import ModelFactory
 from n2f.models.model_identifier import ModelIdentifier
 from n2f.utils.statistics import Statistics
 from n2f.utils.utils import strip_markdown_json, format_error_message
+
+
+class AnnotatedImage(NamedTuple):
+    """Represents the ground truth annotated image with its corresponding JSON annotation file."""
+
+    image_path: Path
+    json_path: Path
+
+
+class Annotation(NamedTuple):
+    """Represents the ground truth annotation containing a bounding box and a label."""
+
+    bounding_box: BoundingBox
+    label: str
 
 
 def main() -> None:
@@ -31,15 +48,20 @@ def main() -> None:
     )
 
     prompt = AnnotatePrompt(arguments.prompt_path)
-    for image_path in tqdm(get_dataset_image_paths(arguments.dataset_path)):
-        statistic = run_model_prediction(
-            model=model,
-            model_identifier=model_identifier,
-            prompt=prompt,
-            image_path=image_path,
-            max_tokens=arguments.max_tokens,
-        )
-        logger.info(statistic.to_json())
+    for image_path, json_path in tqdm(
+        get_dataset_annotated_images(arguments.dataset_path),
+        desc="Running annotation on dataset",
+    ):
+        for annotation in get_annotations_from_json(json_path):
+            statistic = run_model_prediction(
+                model=model,
+                model_identifier=model_identifier,
+                prompt=prompt,
+                image_path=image_path,
+                annotation=annotation,
+                max_tokens=arguments.max_tokens,
+            )
+            logger.info(statistic.to_json())
 
 
 def parse_arguments() -> argparse.Namespace:
@@ -83,7 +105,7 @@ def parse_arguments() -> argparse.Namespace:
     local_parser.add_argument(
         "--model-name",
         type=str,
-        default="qwen2_5_vl",
+        default="qwen_2_5_vl_3b_instruct",
         help="Local model registry key.",
     )
     local_parser.add_argument(
@@ -143,13 +165,42 @@ def get_model_identifier(arguments: argparse.Namespace) -> ModelIdentifier:
             )
 
 
-def get_dataset_image_paths(dataset_path: Path) -> list[Path]:
-    """Returns a list of image file paths found in the dataset directory."""
-    image_paths: list[Path] = []
+def get_dataset_annotated_images(dataset_path: Path) -> list[AnnotatedImage]:
+    """
+    Returns a list of AnnotatedImage instances representing the .jpg images and
+    their corresponding _faces.jsonl files in the dataset directory.
+    """
+    image_paths: list[AnnotatedImage] = []
     for image_directory in tqdm(dataset_path.iterdir()):
-        for image_path in image_directory.iterdir():
-            if image_path.is_file() and image_path.suffix.lower() == ".jpg":
-                image_paths.append(image_path)
+        image_path: Path | None = None
+        json_path: Path | None = None
+
+        for path in image_directory.iterdir():
+            if path.is_file() and path.suffix.lower() == ".jpg":
+                image_path = path
+
+            if (
+                path.is_file()
+                and path.suffix.lower() == ".jsonl"
+                and path.stem.endswith("_faces")
+            ):
+                json_path = path
+
+        if (
+            image_path is not None
+            and json_path is not None
+            and image_path.stem == json_path.stem.replace("_faces", "")
+        ):
+            image_paths.append(
+                AnnotatedImage(image_path=image_path, json_path=json_path)
+            )
+        else:
+            raise ValueError(
+                f"Expected to find both a .jpg image and a corresponding _faces.jsonl "
+                f"file in directory '{image_directory}', but found: "
+                f"image_path='{image_path}', json_path='{json_path}'."
+            )
+
     return image_paths
 
 
@@ -164,12 +215,13 @@ def run_model_prediction(
     model_identifier: ModelIdentifier,
     prompt: AnnotatePrompt,
     image_path: Path,
+    annotation: Annotation,
     max_tokens: int | None,
 ) -> Statistics:
     """Runs the model prediction and returns statistics about the annotation process."""
     start_timestamp = datetime.now()
     prediction_response = model.predict(
-        prompt.render(),
+        prompt.render({"label": annotation.label}),
         [image_path],
         max_tokens=max_tokens,
     )
@@ -183,6 +235,15 @@ def run_model_prediction(
         try:
             cleaned_response_text = strip_markdown_json(prediction_response.text)
             annotation_result = AnnotationResult.from_json(cleaned_response_text)
+
+            if any(
+                not (0 <= value <= 1000)
+                for value in annotation_result.bounding_box.to_list()
+            ):
+                raise ValueError(
+                    f"Bounding box values must be between 0 and 1000. "
+                    f"Got {annotation_result.bounding_box.to_list()}."
+                )
         except Exception as exception:
             success = False
             error_message = format_error_message(exception)
@@ -193,6 +254,8 @@ def run_model_prediction(
         model=str(model_identifier),
         prompt_path=prompt.path,
         annotation_result=annotation_result,
+        label=annotation.label,
+        expected_bounding_box=annotation.bounding_box,
         raw_response=prediction_response.text,
         success=success,
         error_message=error_message,
@@ -201,6 +264,33 @@ def run_model_prediction(
         total_time=end_timestamp - start_timestamp,
         tokens_used=prediction_response.tokens_used,
     )
+
+
+def get_annotations_from_json(json_path: Path) -> list[Annotation]:
+    """Parses the JSONL annotation file and returns a list of Annotation instances."""
+    annotations: list[Annotation] = []
+
+    with json_path.open("r", encoding="utf-8") as file:
+        for line in file:
+            data = json.loads(line)
+
+            bounding_box = BoundingBox.from_page(
+                page_width=data["page_width"],
+                page_height=data["page_height"],
+                page_left=data["page_left"],
+                page_top=data["page_top"],
+                width=data["width"],
+                height=data["height"],
+            )
+
+            annotations.append(
+                Annotation(
+                    bounding_box=bounding_box,
+                    label=data["person_name"],
+                )
+            )
+
+    return annotations
 
 
 if __name__ == "__main__":
