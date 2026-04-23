@@ -1,67 +1,94 @@
+"""Validation script for single-person bounding box localization.
+
+This module evaluates model outputs stored in JSONL files where each row contains:
+- `expected_bounding_box`: ground truth box in XYXY format
+- `annotation_result`: model-predicted box in XYXY format
+- `success`: whether the model produced a valid prediction
+
+For each configured input file, metrics are computed for IoU thresholds 0.1..0.9 and
+saved into a threshold-oriented JSON output in the results directory.
+
+NOTE: This file was refactored using code generation tool.
+"""
+
 import json
+from pathlib import Path
 from typing import TypedDict
 
 
-class BoundingBoxLabelItem(TypedDict):
-    bounding_box: list[int]
-    label: str
+SCRIPT_DIR = Path(__file__).resolve().parent
+RESULTS_DIR = SCRIPT_DIR.parent / "results"
+INPUT_PATHS = [
+    Path("../data/new-prompt.jsonl"),
+    Path("../data/xmin.jsonl"),
+]
+IOU_THRESHOLDS = [round(i / 10, 1) for i in range(1, 10)]
+
+
+class ModelOutputRow(TypedDict):
+    """Input JSONL row schema used by the validator."""
+
+    expected_bounding_box: list[int]
+    annotation_result: list[int] | None
+    success: int
 
 
 class ValidationResults(TypedDict):
-    iou_threshold: float
-    true_positives: int
-    false_positives: int
-    false_negatives: int
-    name_predictions_correct: int
-    f1_score: float
-    iou_histogram: list[int]
-    ious: list[float]
+    """Metrics container for one evaluated input file."""
+
+    input_file: str
+    thresholds: list[float]
+    sample_count: int
+    success: int
+    failure: int
+    true_positives: dict[str, int]
+    false_positives: dict[str, int]
+    false_negatives: dict[str, int]
+    true_negatives: dict[str, int]
+    precision: dict[str, float]
+    recall: dict[str, float]
+    f1_score: dict[str, float]
 
 
-def load_ground_truth_boxes(image_path: str) -> list[BoundingBoxLabelItem]:
-    page_folder = image_path.split("/")[:-1]
-    page_id = page_folder[-1]
-    page_folder = "/".join(page_folder)
-    ground_truth: list[BoundingBoxLabelItem] = []
-    with open("../" + page_folder + "/" + page_id + "_faces.jsonl", "r") as f2:
-        for line2 in f2:
-            page_data = json.loads(line2)
-            page_width = page_data["page_width"]
-            page_height = page_data["page_height"]
-            page_left = page_data["page_left"]
-            page_top = page_data["page_top"]
-            width = page_data["width"]
-            height = page_data["height"]
-            xmin = int((page_left / page_width) * 1000)
-            xmax = int(((page_left + width) / page_width) * 1000)
-            ymin = int((page_top / page_height) * 1000)
-            ymax = int(((page_top + height) / page_height) * 1000)
-            bounding_box = [xmin, ymin, xmax, ymax]
-            ground_truth.append(
-                {"bounding_box": bounding_box, "label": page_data["person_name"]}
-            )
-    return ground_truth
+class SampleEvaluation(TypedDict):
+    """Per-sample reduced evaluation state used for threshold sweeps."""
+
+    iou: float
+    has_prediction: bool
+    success: int
 
 
-def print_bounding_boxes(
-    predictions: list[BoundingBoxLabelItem], ground_truth: list[BoundingBoxLabelItem]
-):
-    print("Predictions:")
-    for item in predictions:
-        print(item["bounding_box"])
-        print(item["label"])
+def log_step(message: str) -> None:
+    """Print a prominent progress message for a major phase."""
 
-    print("Ground truth:")
-    for item in ground_truth:
-        print(item["bounding_box"])
-        print(item["label"])
+    print(f"\n[STEP] {message}")
 
 
-def calculate_iou(boxA: list[int], boxB: list[int]) -> float:
-    inter_xmin = max(boxA[0], boxB[0])
-    inter_ymin = max(boxA[1], boxB[1])
-    inter_xmax = min(boxA[2], boxB[2])
-    inter_ymax = min(boxA[3], boxB[3])
+def log_success(message: str) -> None:
+    """Print a success message for completed work."""
+
+    print(f"[OK]   {message}")
+
+
+def log_info(message: str) -> None:
+    """Print an informational message."""
+
+    print(f"[INFO] {message}")
+
+
+def log_warning(message: str) -> None:
+    """Print a warning message for non-fatal issues."""
+
+    print(f"[WARN] {message}")
+
+
+def calculate_iou(box_a: list[int], box_b: list[int]) -> float:
+    """Calculate IoU for two XYXY bounding boxes."""
+
+    inter_xmin = max(box_a[0], box_b[0])
+    inter_ymin = max(box_a[1], box_b[1])
+    inter_xmax = min(box_a[2], box_b[2])
+    inter_ymax = min(box_a[3], box_b[3])
 
     # Calculate the area of intersection
     inter_area = max(0, inter_xmax - inter_xmin + 1) * max(
@@ -69,154 +96,190 @@ def calculate_iou(boxA: list[int], boxB: list[int]) -> float:
     )
 
     # Calculate the areas of both bounding boxes
-    boxA_area = (boxA[2] - boxA[0] + 1) * (boxA[3] - boxA[1] + 1)
-    boxB_area = (boxB[2] - boxB[0] + 1) * (boxB[3] - boxB[1] + 1)
+    box_a_area = (box_a[2] - box_a[0] + 1) * (box_a[3] - box_a[1] + 1)
+    box_b_area = (box_b[2] - box_b[0] + 1) * (box_b[3] - box_b[1] + 1)
 
     # Calculate IoU
-    iou = inter_area / float(boxA_area + boxB_area - inter_area)
+    denominator = float(box_a_area + box_b_area - inter_area)
+    iou = inter_area / denominator if denominator > 0 else 0.0
 
     return iou
 
 
-def calculate_confusion_matrix(
-    predictions: list[BoundingBoxLabelItem],
-    ground_truth: list[BoundingBoxLabelItem],
-    iou_threshold: float,
-) -> tuple[int, int, int, int, list[float]]:
-    true_positives = 0
-    false_positives = 0
-    false_negatives = 0
-    name_predictions_correct = 0
-    ious: list[float] = []
+def parse_model_bbox(
+    annotation_result: list[int] | None, success: int
+) -> list[int] | None:
+    """Parse model bbox from a row or return None for missing/invalid prediction."""
 
-    for pred in predictions:
-        pred_box = pred["bounding_box"]
-        pred_label = pred["label"]
-        matched_gt = None
-        for gt in ground_truth:
-            gt_box = gt["bounding_box"]
-            gt_label = gt["label"]
-            iou = calculate_iou(pred_box, gt_box)
-            ious.append(iou)
-            if iou >= iou_threshold:
-                matched_gt = gt
-                if pred_label == gt_label:
-                    name_predictions_correct += 1
-                break
-        if matched_gt:
-            true_positives += 1
-            ground_truth.remove(
-                matched_gt
-            )  # Remove matched GT to prevent double counting
-        else:
-            false_positives += 1
+    if not success or annotation_result is None:
+        return None
 
-    false_negatives = len(ground_truth)  # Remaining GT boxes are false negatives
+    if len(annotation_result) != 4:
+        return None
 
-    return (
-        true_positives,
-        false_positives,
-        false_negatives,
-        name_predictions_correct,
-        ious,
+    return annotation_result
+
+
+def calculate_precision_recall_f1(
+    tp: int, fp: int, fn: int
+) -> tuple[float, float, float]:
+    """Compute precision, recall, and F1 from confusion counts."""
+
+    precision = tp / (tp + fp) if (tp + fp) > 0 else 0.0
+    recall = tp / (tp + fn) if (tp + fn) > 0 else 0.0
+    f1 = (
+        2 * (precision * recall) / (precision + recall)
+        if (precision + recall) > 0
+        else 0.0
     )
+    return precision, recall, f1
 
 
-def calculate_f1_score(tp: int, fp: int, fn: int) -> float:
-    if tp + fp == 0 or tp + fn == 0:
-        return 0.0
-    precision = tp / (tp + fp)
-    recall = tp / (tp + fn)
-    if precision + recall == 0:
-        return 0.0
-    f1_score = 2 * (precision * recall) / (precision + recall)
-    return f1_score
+def calculate_confusion_matrix(
+    samples: list[SampleEvaluation],
+    iou_threshold: float,
+) -> tuple[int, int, int, int]:
+    """Calculate confusion-matrix counts for a given IoU threshold.
 
-
-# encapsulate in main
-def main() -> None:
-    iou_threshold = 0.75
+    This task assumes one expected face per sample.
+    - TP: prediction exists and IoU >= threshold
+    - FP: prediction exists and IoU < threshold
+    - FN: expected face missed (no prediction) or badly localized prediction
+    - TN: always 0 in this setup (no true-negative class in positive-only prompts)
+    """
 
     true_positives = 0
     false_positives = 0
     false_negatives = 0
-    # TN is not needed
+    true_negatives = 0
 
-    name_predictions_correct = 0
+    for sample in samples:
+        if sample["has_prediction"] and sample["iou"] >= iou_threshold:
+            true_positives += 1
+        elif sample["has_prediction"]:
+            false_positives += 1
+            false_negatives += 1
+        else:
+            false_negatives += 1
 
-    ious: list[float] = []
+    return true_positives, false_positives, false_negatives, true_negatives
 
-    print("Evaluating model on dataset with IoU threshold:", iou_threshold)
 
-    with open("../data/qwen2_5_vl_3b.jsonl", "r") as f:
+def load_samples(input_path: str) -> list[SampleEvaluation]:
+    """Load and reduce one JSONL input file into sample IoUs and prediction flags."""
+
+    samples: list[SampleEvaluation] = []
+    with open(input_path, "r", encoding="utf-8") as f:
         for line in f:
-            data = json.loads(line)
-            result = data["annotation_result"]
-            predictions: list[BoundingBoxLabelItem] = result["detections"]
-            ground_truth = load_ground_truth_boxes(data["image_path"])
+            row: ModelOutputRow = json.loads(line)
 
-            # print_bounding_boxes(predictions, ground_truth)
-
-            tp, fp, fn, name_correct, iou_hist = calculate_confusion_matrix(
-                predictions, ground_truth, iou_threshold
+            expected_box = row["expected_bounding_box"]
+            predicted_box = parse_model_bbox(
+                row.get("annotation_result"), row.get("success", 0)
             )
-            true_positives += tp
-            false_positives += fp
-            false_negatives += fn
-            name_predictions_correct += name_correct
-            ious.extend(iou_hist)
 
-        print(f"TP: {true_positives}")
-        print(f"FP: {false_positives}")
-        print(f"FN: {false_negatives}")
-        print(f"Name predictions correct: {name_predictions_correct}")
+            if predicted_box is None:
+                samples.append(
+                    {
+                        "iou": 0.0,
+                        "has_prediction": False,
+                        "success": row.get("success", 0),
+                    }
+                )
+                continue
 
-        f1 = calculate_f1_score(true_positives, false_positives, false_negatives)
-        print(f"F1 Score: {f1}")
+            iou = calculate_iou(predicted_box, expected_box)
+            samples.append(
+                {"iou": iou, "has_prediction": True, "success": row.get("success", 0)}
+            )
 
-        histogram = [0] * 10
-        for iou in ious:
-            if iou >= 0 and iou < 0.1:
-                histogram[0] += 1
-            elif iou >= 0.1 and iou < 0.2:
-                histogram[1] += 1
-            elif iou >= 0.2 and iou < 0.3:
-                histogram[2] += 1
-            elif iou >= 0.3 and iou < 0.4:
-                histogram[3] += 1
-            elif iou >= 0.4 and iou < 0.5:
-                histogram[4] += 1
-            elif iou >= 0.5 and iou < 0.6:
-                histogram[5] += 1
-            elif iou >= 0.6 and iou < 0.7:
-                histogram[6] += 1
-            elif iou >= 0.7 and iou < 0.8:
-                histogram[7] += 1
-            elif iou >= 0.8 and iou < 0.9:
-                histogram[8] += 1
-            elif iou >= 0.9 and iou <= 1.0:
-                histogram[9] += 1
+    return samples
 
-        print("IoU Histogram:")
-        for i in range(10):
-            print(f"{i*0.1:.1f}-{(i+1)*0.1:.1f}: {histogram[i]}")
 
-        # save everything into a json file
-        results: ValidationResults = {
-            "iou_threshold": iou_threshold,
-            "true_positives": true_positives,
-            "false_positives": false_positives,
-            "false_negatives": false_negatives,
-            "name_predictions_correct": name_predictions_correct,
-            "f1_score": f1,
-            "iou_histogram": histogram,
-            "ious": ious,
-        }
+def build_output_path(input_path: Path) -> Path:
+    """Build output file path in results directory based on the input filename."""
 
-        with open(
-            f"../results/qwen2_5_vl_3b_statistics_{iou_threshold}.json", "w"
-        ) as f:
+    RESULTS_DIR.mkdir(parents=True, exist_ok=True)
+    return RESULTS_DIR / f"{input_path.stem}_statistics_thresholds.json"
+
+
+def evaluate_file(input_path: Path, iou_thresholds: list[float]) -> ValidationResults:
+    """Evaluate one input file across all IoU thresholds and return metrics."""
+
+    samples = load_samples(str(input_path))
+    success_count = sum(1 for sample in samples if sample["success"] == 1)
+    failure_count = sum(1 for sample in samples if sample["success"] == 0)
+    sample_count = len(samples)
+
+    log_info(f"Evaluating {sample_count} samples")
+    log_info(f"Success 1: {success_count}")
+    log_info(f"Success 0: {failure_count}")
+    log_info(f"IoU thresholds: {iou_thresholds}")
+
+    true_positives: dict[str, int] = {}
+    false_positives: dict[str, int] = {}
+    false_negatives: dict[str, int] = {}
+    true_negatives: dict[str, int] = {}
+    precision_scores: dict[str, float] = {}
+    recall_scores: dict[str, float] = {}
+    f1_scores: dict[str, float] = {}
+
+    for threshold in iou_thresholds:
+        key = f"{threshold:.1f}"
+        tp, fp, fn, tn = calculate_confusion_matrix(samples, threshold)
+        precision, recall, f1 = calculate_precision_recall_f1(tp, fp, fn)
+
+        true_positives[key] = tp
+        false_positives[key] = fp
+        false_negatives[key] = fn
+        true_negatives[key] = tn
+        precision_scores[key] = precision
+        recall_scores[key] = recall
+        f1_scores[key] = f1
+
+        log_info(
+            f"IoU >= {threshold:.1f}: TP={tp}, FP={fp}, FN={fn}, "
+            f"Precision={precision:.4f}, Recall={recall:.4f}, F1={f1:.4f}"
+        )
+
+    return {
+        "input_file": str(input_path),
+        "thresholds": iou_thresholds,
+        "sample_count": sample_count,
+        "success": success_count,
+        "failure": failure_count,
+        "true_positives": true_positives,
+        "false_positives": false_positives,
+        "false_negatives": false_negatives,
+        "true_negatives": true_negatives,
+        "precision": precision_scores,
+        "recall": recall_scores,
+        "f1_score": f1_scores,
+    }
+
+
+def main() -> None:
+    """Run validation for all configured input files."""
+
+    log_step("Starting validation run")
+    log_info(f"Configured input files: {len(INPUT_PATHS)}")
+
+    for input_path in INPUT_PATHS:
+        resolved_input = (SCRIPT_DIR / input_path).resolve()
+        if not resolved_input.exists():
+            log_warning(f"Input file not found, skipping: {resolved_input}")
+            continue
+
+        log_step(f"Evaluating file: {resolved_input.name}")
+        results = evaluate_file(resolved_input, IOU_THRESHOLDS)
+
+        output_path = build_output_path(resolved_input)
+        with open(output_path, "w", encoding="utf-8") as f:
             json.dump(results, f, indent=4)
+
+        log_success(f"Saved validation results: {output_path}")
+
+    log_step("Validation run finished")
 
 
 if __name__ == "__main__":

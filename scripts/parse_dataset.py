@@ -11,6 +11,8 @@ PeopleGator tool. It handles:
 
 Usage:
     Adjust the paths in `DatasetConfig` and run the script.
+
+NOTE: This file was refactored using code generation tool.
 """
 
 import json
