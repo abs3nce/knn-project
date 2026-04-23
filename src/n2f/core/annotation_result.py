@@ -20,12 +20,12 @@ class AnnotationResult:
         """Returns an AnnotationResult instance created from a dictionary."""
         bounding_box_data = data["bbox_2d"]
 
-        # Assuming the bounding box values are in the format [y_min, x_min, y_max, x_max]
+        # Assuming the bounding box values are in the format [x_min, y_min, x_max, y_max]
         bounding_box = BoundingBox(
-            x_min=bounding_box_data[1],
-            y_min=bounding_box_data[0],
-            x_max=bounding_box_data[3],
-            y_max=bounding_box_data[2],
+            x_min=bounding_box_data[0],
+            y_min=bounding_box_data[1],
+            x_max=bounding_box_data[2],
+            y_max=bounding_box_data[3],
         )
 
         return cls(bounding_box=bounding_box)
