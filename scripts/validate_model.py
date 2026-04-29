@@ -15,12 +15,18 @@ import json
 from pathlib import Path
 from typing import TypedDict
 
-
 SCRIPT_DIR = Path(__file__).resolve().parent
 RESULTS_DIR = SCRIPT_DIR.parent / "results"
 INPUT_PATHS = [
-    Path("../data/new-prompt.jsonl"),
-    Path("../data/xmin.jsonl"),
+    Path("../answers/output_3b_base_all.jsonl"),
+    Path("../answers/output_7b_base_all.jsonl"),
+    Path("../answers/output_32b_base_all.jsonl"),
+    Path("../answers/output_3b_base_test42.jsonl"),
+    Path("../answers/output_7b_base_test42.jsonl"),
+    Path("../answers/output_32b_base_test42.jsonl"),
+    Path("../answers/output_3b_lora_test42.jsonl"),
+    Path("../answers/output_7b_lora_test42.jsonl"),
+    # Path("../answers/output_32b_lora_test42.jsonl"),
 ]
 IOU_THRESHOLDS = [round(i / 10, 1) for i in range(1, 10)]
 
@@ -39,6 +45,7 @@ class ValidationResults(TypedDict):
     input_file: str
     thresholds: list[float]
     sample_count: int
+    average_iou: float
     success: int
     failure: int
     true_positives: dict[str, int]
@@ -210,10 +217,16 @@ def evaluate_file(input_path: Path, iou_thresholds: list[float]) -> ValidationRe
     success_count = sum(1 for sample in samples if sample["success"] == 1)
     failure_count = sum(1 for sample in samples if sample["success"] == 0)
     sample_count = len(samples)
+    average_iou = (
+        sum(sample["iou"] for sample in samples) / sample_count
+        if sample_count > 0
+        else 0.0
+    )
 
     log_info(f"Evaluating {sample_count} samples")
     log_info(f"Success 1: {success_count}")
     log_info(f"Success 0: {failure_count}")
+    log_info(f"Average IoU: {average_iou:.4f}")
     log_info(f"IoU thresholds: {iou_thresholds}")
 
     true_positives: dict[str, int] = {}
@@ -246,6 +259,7 @@ def evaluate_file(input_path: Path, iou_thresholds: list[float]) -> ValidationRe
         "input_file": str(input_path),
         "thresholds": iou_thresholds,
         "sample_count": sample_count,
+        "average_iou": average_iou,
         "success": success_count,
         "failure": failure_count,
         "true_positives": true_positives,

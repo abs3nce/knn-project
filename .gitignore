@@ -1,6 +1,3 @@
-# Results from evaluation of the models answers
-results/
-
 # Models and data files
 data/
 *.pkl
