@@ -21,7 +21,8 @@ class ModelFactory:
         self.local_model_registry: dict[str, type[LocalModel]] = {
             "qwen_2_5_vl_3b_instruct": Qwen_2_5_vl_xb_instruct_model,
             "qwen_2_5_vl_7b_instruct": Qwen_2_5_vl_xb_instruct_model,
-            "qwen_2_5_vl_32b_instruct": Qwen_2_5_vl_xb_instruct_model
+            "qwen_2_5_vl_32b_instruct": Qwen_2_5_vl_xb_instruct_model,
+            "qwen_2_5_vl_lora": Qwen_2_5_vl_xb_instruct_model,
         }
 
     def create_model(
@@ -41,6 +42,7 @@ class ModelFactory:
                 return self._create_local_model(
                     model_name=model_identifier.registry_key,
                     model_path_string=model_identifier.target_value,
+                    keyword_arguments=keyword_arguments,
                 )
             case _:
                 raise ValueError(
@@ -68,7 +70,12 @@ class ModelFactory:
 
         return model_class(api_key=api_key, model_name=model_name)
 
-    def _create_local_model(self, model_name: str, model_path_string: str) -> Model:
+    def _create_local_model(
+        self, 
+        model_name: str, 
+        model_path_string: str,
+        keyword_arguments: dict[str, Any],
+    ) -> Model:
         model_class = self.local_model_registry.get(model_name)
         if model_class is None:
             available_models = ", ".join(self.local_model_registry.keys())
@@ -78,4 +85,4 @@ class ModelFactory:
             )
 
         model_path = Path(model_path_string)
-        return model_class(model_path=model_path)
+        return model_class(model_path=model_path, **keyword_arguments)

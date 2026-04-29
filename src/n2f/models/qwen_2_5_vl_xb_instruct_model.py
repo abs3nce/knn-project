@@ -1,6 +1,7 @@
 """A module for defining the Qwen2.5-VL model."""
 
 from pathlib import Path
+from peft import PeftModel
 
 from qwen_vl_utils import process_vision_info
 from transformers import (
@@ -18,13 +19,26 @@ from n2f.utils.utils import format_error_message
 class Qwen_2_5_vl_xb_instruct_model(LocalModel):
     """A class for interacting with the Qwen2.5-VL model."""
 
-    def __init__(self, model_path: Path) -> None:
+    def __init__(
+        self, 
+        model_path: Path,
+        lora_path: Path | None = None,
+        **kwargs,
+    ) -> None:
         super().__init__(model_path)
         self.model = Qwen2_5_VLForConditionalGeneration.from_pretrained(
             model_path,
             torch_dtype="auto",
             device_map="auto",
         )
+
+        if lora_path is not None:
+            self.model = PeftModel.from_pretrained(
+                self.model, 
+                lora_path, 
+                # torch_dtype="auto", device_map="auto"
+            )
+
         patch_size = 28
         self.processor = AutoProcessor.from_pretrained(
             model_path,
