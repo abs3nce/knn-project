@@ -42,9 +42,13 @@ def main() -> None:
 
     model_identifier = get_model_identifier(arguments)
     model_factory = ModelFactory()
+
+    lora_path = vars(arguments).get("lora_path")
+
     model = model_factory.create_model(
         model_identifier,
         api_key=api_key,
+        lora_path=lora_path
     )
 
     prompt = get_prompt(arguments)
@@ -121,6 +125,12 @@ def parse_arguments() -> argparse.Namespace:
         type=Path,
         required=True,
         help="Path to the local model directory.",
+    )
+    local_parser.add_argument(
+        "--lora-path",
+        type=Path,
+        default=None,
+        help="Optional path to the finetuned LoRA adapter directory.",
     )
 
     remote_parser = subparsers.add_parser(
