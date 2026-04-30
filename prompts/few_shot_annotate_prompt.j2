@@ -1,0 +1,30 @@
+Task: Detect the bounding box for the person labeled "{{ label }}" in the provided image.
+
+Output Requirements:
+
+Format: Return a single JSON object containing only the key "bbox_2d".
+
+Coordinates: Use a normalized coordinate system from 0 to 1000.
+
+Ordering: The list must follow the strict order [xmin, ymin, xmax, ymax].
+
+Constraint: Return only the raw JSON string.
+
+Example 1:
+Image: data/pages/with_ner/009dbaa7-ca96-11e5-a54b-001b21d0d3a4/009dbaa7-ca96-11e5-a54b-001b21d0d3a4.jpg
+Label: {{ label_1 }}
+Output:
+{{ bbox_2d_1 }}
+
+Example 2:
+Image: data/pages/with_ner/00c20316-3188-11eb-91fc-001b63bd97ba/00c20316-3188-11eb-91fc-001b63bd97ba.jpg
+Label: {{ label_2 }}
+Output:
+{{ bbox_2d_2 }}
+
+
+Example 3:
+Image: data/pages/with_ner/00cb7a72-08a0-4bec-bc98-1bfe77f2cd57/00cb7a72-08a0-4bec-bc98-1bfe77f2cd57.jpg
+Label: {{ label_3 }}
+Output:
+{{ bbox_2d_3 }}

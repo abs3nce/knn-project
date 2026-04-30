@@ -11,7 +11,7 @@ from loguru import logger
 
 from n2f.core.annotation_result import AnnotationResult
 from n2f.core.bounding_box import BoundingBox
-from n2f.core.prompt import AnnotatePrompt
+from n2f.core.prompt import AnnotatePrompt, FewShotAnnotatePrompt, Prompt
 from n2f.models.model import Model
 from n2f.models.model_factory import ModelFactory
 from n2f.models.model_identifier import ModelIdentifier
@@ -47,7 +47,7 @@ def main() -> None:
         api_key=api_key,
     )
 
-    prompt = AnnotatePrompt(arguments.prompt_path)
+    prompt = get_prompt(arguments)
     for image_path, json_path in tqdm(
         get_dataset_annotated_images(arguments.dataset_path),
         desc="Running annotation on dataset",
@@ -82,6 +82,14 @@ def parse_arguments() -> argparse.Namespace:
         type=Path,
         default=Path("prompts/annotate_prompt.j2"),
         help="Path to the Jinja2 prompt template.",
+    )
+    shared.add_argument(
+        "--few-shot",
+        action="store_true",
+        help=(
+            "Enable few-shot mode. Example images are parsed from 'Image: ...' "
+            "lines in --prompt-path."
+        ),
     )
     shared.add_argument(
         "--jsonl-output-path",
@@ -210,10 +218,17 @@ def initialize_logger(log_path: Path) -> None:
     logger.add(log_path, format="{message}")
 
 
+def get_prompt(arguments: argparse.Namespace) -> Prompt:
+    """Returns the configured prompt implementation."""
+    if arguments.few_shot:
+        return FewShotAnnotatePrompt(arguments.prompt_path)
+    return AnnotatePrompt(arguments.prompt_path)
+
+
 def run_model_prediction(
     model: Model,
     model_identifier: ModelIdentifier,
-    prompt: AnnotatePrompt,
+    prompt: Prompt,
     image_path: Path,
     annotation: Annotation,
     max_tokens: int | None,
@@ -222,7 +237,7 @@ def run_model_prediction(
     start_timestamp = datetime.now()
     prediction_response = model.predict(
         prompt.render({"label": annotation.label}),
-        [image_path],
+        [*prompt.image_paths(), image_path],
         max_tokens=max_tokens,
     )
     end_timestamp = datetime.now()
