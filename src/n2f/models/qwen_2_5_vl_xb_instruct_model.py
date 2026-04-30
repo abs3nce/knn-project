@@ -20,7 +20,7 @@ class Qwen_2_5_vl_xb_instruct_model(LocalModel):
     """A class for interacting with the Qwen2.5-VL model."""
 
     def __init__(
-        self, 
+        self,
         model_path: Path,
         lora_path: Path | None = None,
         **kwargs,
@@ -34,8 +34,8 @@ class Qwen_2_5_vl_xb_instruct_model(LocalModel):
 
         if lora_path is not None:
             self.model = PeftModel.from_pretrained(
-                self.model, 
-                lora_path, 
+                self.model,
+                lora_path,
                 # torch_dtype="auto", device_map="auto"
             )
 

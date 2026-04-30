@@ -71,8 +71,8 @@ class ModelFactory:
         return model_class(api_key=api_key, model_name=model_name)
 
     def _create_local_model(
-        self, 
-        model_name: str, 
+        self,
+        model_name: str,
         model_path_string: str,
         keyword_arguments: dict[str, Any],
     ) -> Model:

@@ -48,7 +48,7 @@ def main() -> None:
     model = model_factory.create_model(
         model_identifier,
         api_key=api_key,
-        lora_path=lora_path
+        lora_path=lora_path,
     )
 
     prompt = get_prompt(arguments)
