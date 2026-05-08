@@ -18,15 +18,11 @@ from typing import TypedDict
 SCRIPT_DIR = Path(__file__).resolve().parent
 RESULTS_DIR = SCRIPT_DIR.parent / "results"
 INPUT_PATHS = [
-    Path("../answers/output_3b_base_all.jsonl"),
-    Path("../answers/output_7b_base_all.jsonl"),
-    Path("../answers/output_32b_base_all.jsonl"),
     Path("../answers/output_3b_base_test42.jsonl"),
     Path("../answers/output_7b_base_test42.jsonl"),
     Path("../answers/output_32b_base_test42.jsonl"),
     Path("../answers/output_3b_lora_test42.jsonl"),
-    Path("../answers/output_7b_lora_test42.jsonl"),
-    # Path("../answers/output_32b_lora_test42.jsonl"),
+    Path("../answers/output_3b_fewshot_test42.jsonl"),
 ]
 IOU_THRESHOLDS = [round(i / 10, 1) for i in range(1, 10)]
 
